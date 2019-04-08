@@ -1,6 +1,11 @@
 var MongoClient = require('mongodb').MongoClient;
 var url = "mongodb://hoaidien:maiyeu0510@ds151453.mlab.com:51453/hd_mongo";
 var dbo;
+async function checkLogin(email,password){
+    var query = {email : email, password: password};
+    var rs = await dbo.collection("user").find(query).toArray();
+    return rs;
+}
 class FrontController{
     constructor(){
         //Ket noi dtb:
@@ -31,7 +36,6 @@ class FrontController{
             name: sess.name
         });
     }
-
     /**
      *
      * @param req
@@ -42,31 +46,29 @@ class FrontController{
         let email = req.body.email;
         let password = req.body.password;
         //check database
-            var query = {email : email, password: password};
-            dbo.collection("user").find(query).toArray((err,result)=>{
-                if(err) throw  err;
-                if (result.length > 0) {
-                    var sess = req.session;
-                    sess.name = result[0]['name'] ;
-                    sess.email = result[0]['email'];
-                    sess.level = result[0]['level'];
-                    var linkRD;//link redirect
-                    if (typeof sess.linkRD !== 'undefined') {
-                        linkRD = ""+ sess.linkRD ;
-                    }
-                    else linkRD = undefined;
-                    //set empty link redirect
-                    sess.linkRD = undefined;
-                    if (typeof  linkRD !== 'undefined') return res.redirect(linkRD);
-                    return res.redirect('/');
+        checkLogin(email,password).then(function(result){
+            if (result.length > 0) {
+                var sess = req.session;
+                sess.name = result[0]['name'] ;
+                sess.email = result[0]['email'];
+                sess.level = result[0]['level'];
+                var linkRD;//link redirect
+                if (typeof sess.linkRD !== 'undefined') {
+                    linkRD = ""+ sess.linkRD ;
                 }
-                else{
+                else linkRD = undefined;
+                //set empty link redirect
+                sess.linkRD = undefined;
+                if (typeof  linkRD !== 'undefined') return res.redirect(linkRD);
+                return res.redirect('/');
+            }
+            else{
 
-                    return res.render('login',{
-                        status: "Username or password is incorrect"
-                    });
-                }
-            });
+                return res.render('login',{
+                    status: "Username or password is incorrect"
+                });
+            }
+        });         
     }
 	checkEmail(req,res){
 		let email = req.body.email;

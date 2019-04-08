@@ -1,12 +1,10 @@
 var MongoClient = require('mongodb').MongoClient;
 var url = "mongodb://hoaidien:maiyeu0510@ds151453.mlab.com:51453/hd_mongo";
 var dbo;
-async function checkLogin(email,password){
-    var query = {email : email, password: password};
-    var rs = await dbo.collection("user").find(query).toArray();
-    return rs;
-}
+var DataProvider = require('../Model/DataProvider');
+var dataProvider = new DataProvider();
 class FrontController{
+
     constructor(){
         //Ket noi dtb:
         MongoClient.connect(url,{useNewUrlParser: true },(err,db)=> {
@@ -46,7 +44,7 @@ class FrontController{
         let email = req.body.email;
         let password = req.body.password;
         //check database
-        checkLogin(email,password).then(function(result){
+        dataProvider.checkLogin(email,password).then(function(result){
             if (result.length > 0) {
                 var sess = req.session;
                 sess.name = result[0]['name'] ;
@@ -63,30 +61,22 @@ class FrontController{
                 return res.redirect('/');
             }
             else{
-
                 return res.render('login',{
                     status: "Username or password is incorrect"
                 });
             }
         });         
     }
+
 	checkEmail(req,res){
 		let email = req.body.email;
-		var query = {email: email};
-		dbo.collection("user").find(query).toArray((err, result) => {
-			if (err) throw err;
-			 if (result.length !== 0) {
-				 return res.send({
-					status : false
-				});
-			 }
-			 else 
-				return res.send({
-					status : true
-				});
-		});
-		
-	}
+		dataProvider.isExistEmail(email).then(function(status){
+            return res.send({
+                status: status
+            });
+        });
+    }
+    
     /**
      *
      * @param req
@@ -105,37 +95,35 @@ class FrontController{
             create = false;
         }
         //Connect MongoDB to check username !;
-            var query = {email: email};
-            dbo.collection("user").find(query).toArray((err, result) => {
-                if (err) throw err;
-                if (result.length !== 0) {
-                    renderData['status_email'] = "Email is existed!";
-                }
-                else {
-                    if (create === true) {
-                        let account = {email: email,name: name, password: password};
-                        dbo.collection("user").insertOne(account, (err, result) => {
-                            if (err) throw err;
-                        });
-                        var sess = req.session;
-                        sess.name = name;
-                        sess.email = email;
-                        return res.redirect('/');
+        dataProvider.isExistEmail(email).then(function(res)
+        {
+            if (!res) {
+                renderData['status_email'] = "Email is existed!";
+            }
+            else {
+                if (create === true) {
+                    dataProvider.createAccount(email,name,password);
+                    var sess = req.session;
+                    sess.name = name;
+                    sess.email = email;
+                    return res.redirect('/');
 
-                    }
                 }
-                return res.render('register', {
-                    status_email: renderData['status_email'],
-                    status_password: renderData['status_password']
-                });
+            }
+            return res.render('register', {
+                status_email: renderData['status_email'],
+                status_password: renderData['status_password']
+            });
             });
     }
+
     Logout(req,res) {
         req.session.destroy(function (err) {
             if (err) throw err;
         });
         return res.redirect('/');
     }
+
     Vocabulary(req,res){
         var sess = req.session;
         var renderData = [];
@@ -149,52 +137,52 @@ class FrontController{
         renderData['content1'] = "To evaluate your ability exactly. We prepare for you a proficiency test";
         renderData['content2'] = "Thank you for your attention!";
         renderData['link'] = "/firstTest";
-        if (typeof sess.level ==='undefined'){
+        if (typeof sess.level === 'undefined'){
             return res.render('prepareTest',{
                 renderData: renderData
             })
         }
         //getCurrentLevel
-        let query = {email : sess.email};
-        dbo.collection('user').find(query).toArray((err,result)=>{
-            if (err) throw err;
+        dataProvider.findInfoUser(sess.email).then(function(result)
+        {
             //get data from result
             if (result.length === 0 ) return res.send('Something went wrong!');
             let level = result[0]['vocabularyLevel'];
             let level_FT = result[0]['level'] === "Beginer" ? "Level1" : "Level2";
             let table = "Vocabulary_"+level_FT+"_"+level;
-            dbo.collection(table).find({}).toArray((err,result)=>{
-                if (err) throw err;
+            dataProvider.getQuestions(table).then(function(questionInfo){
                 return res.render('Vocabulary',{
-                    topic : result[0]['topic'],
+                    topic : questionInfo[0]['topic'],
                     name : "Hello "+ sess.name ,
-                    renderData: result
+                    renderData: questionInfo
                 });
             });
         });
     }
+
     PostVocabulary(req,res){
         // list ket qua
-            var score =0;
-            dbo.collection('Vocabulary').find({}).toArray((err,result)=>{
-                if (err) throw  err;
-                var i;
-                for(i = 0 ; i < result.length;i++){
-                    if (result[i]['answer'] === req.body[i+1]) score++;
-                }
-                var sess = req.session;
-                if (typeof sess.email ==='undefined') return res.redirect('/login');
-                var query = {email :  sess.email};
-                var newRecord = {$set : {scoreV1: score}};
-               dbo.collection('user').updateOne(query,newRecord,(err,res)=>{
-                   if (err) throw err;
-                });
+        var score = 0;
+        dbo.collection('Vocabulary').find({}).toArray((err,result)=>{
+            if (err) throw  err;
+            var i;
+            for(i = 0 ; i < result.length;i++){
+                if (result[i]['answer'] === req.body[i+1]) score++;
+            }
+            var sess = req.session;
+            if (typeof sess.email ==='undefined') return res.redirect('/login');
+            var query = {email :  sess.email};
+            var newRecord = {$set : {scoreV1: score}};
+            dbo.collection('user').updateOne(query,newRecord,(err,res)=>{
+                if (err) throw err;
+            });
 
-            })
+        })
         var sess = req.session;
-        sess.mess = "Your Score will show to your profile in few seconds"
+        sess.mess = "Your Score will show to your profile in few seconds";
         return res.redirect('/');
     }
+
     MyProfile(req,res){
         var sess = req.session;
         var renderData =  [];

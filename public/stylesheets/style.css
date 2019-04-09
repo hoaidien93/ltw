@@ -1,0 +1,13 @@
+.title {
+	text-align: center;
+}
+.color-red{
+	color: red;
+}
+.h-5{
+	height: 5px;
+}
+.center{
+	display: flex;
+	align-items: center;
+}

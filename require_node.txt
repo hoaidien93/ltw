@@ -1,1 +1,0 @@
-Require trong node js se cached lai thong tin da require truoc do
